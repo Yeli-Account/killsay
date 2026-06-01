@@ -124,7 +124,7 @@ public class KillSayMod implements ClientModInitializer {
                 "",
                 "> **该 Mod 完全免费，如果你是付费获取的，恭喜你被圈了**",
                 "",
-                "一个 Minecraft Fabric \u5ba2\u6237\u7aef\u6a21\u7ec4\uff0c\u51fb\u6740\u5b9e\u4f53\u540e\u81ea\u52a8\u53d1\u9001\u81ea\u5b9a\u4e49\u6d88\u606f\u3002",
+                "一个 Minecraft Fabric \u5ba2\u6237\u7aef\u6a21\u7ec4\uff0c\u51fb\u6740\u81ea\u52a8\u53d1\u8a00\u3002",
                 "",
                 "---",
                 "",
