@@ -49,6 +49,7 @@ public class KillSayMod implements ClientModInitializer {
     private boolean enabled = true;
     private boolean testing = false;
     private long lastTestTime = 0;
+    private long lastCombatTime = 0;
 
     private static class AttackRecord {
         final long time;
@@ -380,6 +381,7 @@ public class KillSayMod implements ClientModInitializer {
     private void registerAttackTracker() {
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!enabled) return ActionResult.PASS;
+            lastCombatTime = System.currentTimeMillis();
             if (entity instanceof LivingEntity living) {
                 tracked.put(entity.getId(), new AttackRecord(
                         System.currentTimeMillis(),
@@ -416,6 +418,10 @@ public class KillSayMod implements ClientModInitializer {
             }
 
             long now = System.currentTimeMillis();
+
+            if (client.player.handSwinging || client.player.isUsingItem()) {
+                lastCombatTime = now;
+            }
 
             trackEntityHealth(client);
 
@@ -502,6 +508,8 @@ public class KillSayMod implements ClientModInitializer {
 
     private void trackEntityHealth(MinecraftClient client) {
         if (client.world == null || client.player == null) return;
+        long now = System.currentTimeMillis();
+        if (now - lastCombatTime > 2000) return;
         double range = 64.0;
         Map<Integer, Float> newHealthMap = new HashMap<>();
         for (Entity entity : client.world.getEntities()) {
