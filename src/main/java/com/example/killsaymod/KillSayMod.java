@@ -155,7 +155,7 @@ public class KillSayMod implements ClientModInitializer {
                 "### /ks",
                 "\u5f00\u5173\u81ea\u52a8\u558a\u8bdd\u529f\u80fd\u3002\u518d\u6b21\u8f93\u5165\u5207\u6362\u5f00\u5173\u72b6\u6001\u3002",
                 "",
-                "### /ksreload",
+                "### /ksload",
                 "\u91cd\u65b0\u52a0\u8f7d\u5f53\u524d\u8bcd\u6c47\u6587\u4ef6\u3002\u4fee\u6539\u4e86 killsay.txt \u540e\u5728\u6e38\u620f\u4e2d\u76f4\u63a5\u91cd\u8f7d\uff0c\u65e0\u9700\u91cd\u542f\u6e38\u620f\u3002",
                 "",
                 "### /ksreset",
@@ -262,7 +262,7 @@ public class KillSayMod implements ClientModInitializer {
                         return 1;
                     })
             );
-            dispatcher.register(literal("ksreload")
+            dispatcher.register(literal("ksload")
                     .executes(ctx -> {
                         loadPhrases();
                         ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u8bcd\u6c47\u5df2\u91cd\u65b0\u52a0\u8f7d"));
