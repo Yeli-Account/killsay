@@ -92,7 +92,8 @@ public class KillSayMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
-        loadPhrases();
+        ensureDefaultFile();
+        loadAllPhrases();
         createReadme();
         registerCommands();
         registerAttackTracker();
@@ -158,8 +159,8 @@ public class KillSayMod implements ClientModInitializer {
                 "### /ks",
                 "\u5f00\u5173\u51fb\u6740\u81ea\u52a8\u53d1\u8a00\u529f\u80fd\u3002\u518d\u6b21\u8f93\u5165\u5207\u6362\u5f00\u5173\u72b6\u6001\u3002",
                 "",
-                "### /ksreload",
-                "\u91cd\u65b0\u52a0\u8f7d\u5f53\u524d\u8bcd\u6c47\u6587\u4ef6\u3002\u4fee\u6539\u4e86 killsay.txt \u540e\u5728\u6e38\u620f\u4e2d\u76f4\u63a5\u91cd\u8f7d\uff0c\u65e0\u9700\u91cd\u542f\u6e38\u620f\u3002",
+                "### /ksload",
+                "\u91cd\u65b0\u52a0\u8f7d killsay/ \u76ee\u5f55\u4e0b\u6240\u6709 .txt \u6587\u4ef6\uff0c\u5408\u5e76\u6240\u6709\u975e\u7a7a\u884c\u4f5c\u4e3a\u8bcd\u6c47\u6c60\u3002\u4fee\u6539\u6587\u4ef6\u540e\u5728\u6e38\u620f\u4e2d\u76f4\u63a5\u8f93\u5165\u5373\u53ef\u5237\u65b0\uff0c\u65e0\u9700\u91cd\u542f\u6e38\u620f\u3002",
                 "",
                 "### /ksreset",
                 "\u6062\u590d\u9ed8\u8ba4\u8bcd\u6c47\u3002\u4f1a\u5c06 killsay.txt \u91cd\u7f6e\u4e3a\u521d\u59cb\u5185\u5bb9\u5e76\u91cd\u65b0\u52a0\u8f7d\u3002",
@@ -213,22 +214,48 @@ public class KillSayMod implements ClientModInitializer {
         );
     }
 
-    private void loadPhrases() {
+    private void ensureDefaultFile() {
         try {
             Path path = getPhrasesPath();
             if (Files.notExists(path)) {
                 Files.createDirectories(path.getParent());
                 Files.writeString(path, String.join(System.lineSeparator(), defaultPhrases()));
+                LOGGER.info("Created default phrases file at {}", path);
             }
-            phrases = Files.readAllLines(path).stream()
-                    .map(String::trim)
-                    .filter(line -> !line.isEmpty() && !line.startsWith("#"))
-                    .toList();
-            currentPhraseFile = "killsay.txt";
-            LOGGER.info("Loaded {} phrases from {}", phrases.size(), path);
         } catch (IOException e) {
-            LOGGER.error("Failed to load phrases file", e);
-            phrases = List.of("1@{name}");
+            LOGGER.error("Failed to create default phrases file", e);
+        }
+    }
+
+    private void loadAllPhrases() {
+        try {
+            Path dir = getKillsayDir();
+            if (Files.notExists(dir) || !Files.isDirectory(dir)) {
+                phrases = List.of("@{name}");
+                return;
+            }
+            List<String> all = new ArrayList<>();
+            List<Path> txtFiles;
+            try (var stream = Files.list(dir)) {
+                txtFiles = stream
+                        .filter(p -> p.toString().endsWith(".txt"))
+                        .sorted()
+                        .toList();
+            }
+            for (Path p : txtFiles) {
+                List<String> lines = Files.readAllLines(p).stream()
+                        .map(String::trim)
+                        .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                        .toList();
+                all.addAll(lines);
+            }
+            if (all.isEmpty()) all.add("@{name}");
+            phrases = List.copyOf(all);
+            currentPhraseFile = "";
+            LOGGER.info("Loaded {} phrases from {} files in {}", phrases.size(), txtFiles.size(), dir);
+        } catch (IOException e) {
+            LOGGER.error("Failed to load all phrases", e);
+            if (phrases.isEmpty()) phrases = List.of("@{name}");
         }
     }
 
@@ -266,20 +293,10 @@ public class KillSayMod implements ClientModInitializer {
                         return 1;
                     })
             );
-            dispatcher.register(literal("ksreload")
-                    .executes(ctx -> {
-                        loadPhrases();
-                        ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u8bcd\u6c47\u5df2\u91cd\u65b0\u52a0\u8f7d"));
-                        return 1;
-                    })
-            );
             dispatcher.register(literal("ksload")
                     .executes(ctx -> {
-                        if (loadPhrases(currentPhraseFile)) {
-                            ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u5df2\u91cd\u65b0\u52a0\u8f7d: " + currentPhraseFile));
-                        } else {
-                            ctx.getSource().sendFeedback(Text.literal("\u00a7c[KillSayMod] \u52a0\u8f7d\u5931\u8d25: " + currentPhraseFile));
-                        }
+                        loadAllPhrases();
+                        ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u5df2\u5237\u65b0\u52a0\u8f7d\u6240\u6709\u8bcd\u6c47\u6587\u4ef6\uff0c\u5171" + phrases.size() + "\u6761\u8bcd\u6c47"));
                         return 1;
                     })
             );
@@ -289,7 +306,7 @@ public class KillSayMod implements ClientModInitializer {
                             Path path = getPhrasesPath();
                             Files.createDirectories(path.getParent());
                             Files.writeString(path, String.join(System.lineSeparator(), defaultPhrases()));
-                            loadPhrases();
+                            loadAllPhrases();
                             ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u5df2\u6062\u590d\u9ed8\u8ba4\u8bcd\u6c47"));
                         } catch (IOException e) {
                             ctx.getSource().sendFeedback(Text.literal("\u00a7c[KillSayMod] \u6062\u590d\u5931\u8d25: " + e.getMessage()));
@@ -377,8 +394,8 @@ public class KillSayMod implements ClientModInitializer {
                                             }
                                             Files.delete(path);
                                             if (fileName.equals(currentPhraseFile)) {
-                                                loadPhrases();
-                                                ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u5df2\u5220\u9664\u5f53\u524d\u8bcd\u6c47\u6587\u4ef6\uff0c\u5df2\u81ea\u52a8\u56de\u9000\u5230\u9ed8\u8ba4\u8bcd\u6c47"));
+                                                loadAllPhrases();
+                                                ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u5df2\u5220\u9664\u5f53\u524d\u8bcd\u6c47\u6587\u4ef6\uff0c\u5df2\u81ea\u52a8\u56de\u9000\u5230\u5168\u90e8\u8bcd\u6c47"));
                                             } else {
                                                 ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u5df2\u5220\u9664: " + fileName));
                                             }
