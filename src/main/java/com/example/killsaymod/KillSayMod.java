@@ -703,11 +703,30 @@ public class KillSayMod implements ClientModInitializer {
                 .replace("{item}", item)
                 .replace("{weapon}", item);
 
-        return r
+        r = r
                 .replace("{x}", String.valueOf((int) player.getX()))
                 .replace("{y}", String.valueOf((int) player.getY()))
                 .replace("{z}", String.valueOf((int) player.getZ()))
                 .replace("{random}", String.format("%06d", RANDOM.nextInt(1000000)))
                 .replace("{randomletters}", randomLettersStr);
+
+        return obfuscateCjk(r);
+    }
+
+    private static String obfuscateCjk(String text) {
+        StringBuilder sb = new StringBuilder(text.length() * 2);
+        boolean lastCjk = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            boolean isCjk = (c >= '\u4E00' && c <= '\u9FFF')
+                    || (c >= '\u3400' && c <= '\u4DBF')
+                    || (c >= '\uF900' && c <= '\uFAFF');
+            if (isCjk && lastCjk) {
+                sb.append('\u200B');
+            }
+            sb.append(c);
+            lastCjk = isCjk;
+        }
+        return sb.toString();
     }
 }
