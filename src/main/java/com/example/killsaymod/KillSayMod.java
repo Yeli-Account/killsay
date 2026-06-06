@@ -22,9 +22,13 @@ import org.slf4j.LoggerFactory;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -214,6 +218,30 @@ public class KillSayMod implements ClientModInitializer {
         );
     }
 
+    private List<String> readLinesWithFallback(Path path) throws IOException {
+        byte[] bytes = Files.readAllBytes(path);
+        List<Charset> charsets = Arrays.asList(
+                StandardCharsets.UTF_8,
+                Charset.forName("GBK"),
+                Charset.forName("GB18030"),
+                Charset.defaultCharset()
+        );
+        for (Charset cs : charsets) {
+            if (cs == null) continue;
+            String content = new String(bytes, cs);
+            if (content.indexOf('\uFFFD') < 0) {
+                return content.lines()
+                        .map(String::trim)
+                        .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                        .toList();
+            }
+        }
+        return new String(bytes, StandardCharsets.UTF_8).lines()
+                .map(String::trim)
+                .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                .toList();
+    }
+
     private void ensureDefaultFile() {
         try {
             Path path = getPhrasesPath();
@@ -243,10 +271,7 @@ public class KillSayMod implements ClientModInitializer {
                         .toList();
             }
             for (Path p : txtFiles) {
-                List<String> lines = Files.readAllLines(p).stream()
-                        .map(String::trim)
-                        .filter(line -> !line.isEmpty() && !line.startsWith("#"))
-                        .toList();
+                List<String> lines = readLinesWithFallback(p);
                 all.addAll(lines);
             }
             if (all.isEmpty()) all.add("@{name}");
@@ -269,10 +294,7 @@ public class KillSayMod implements ClientModInitializer {
                 }
                 if (Files.notExists(path)) return false;
             }
-            phrases = Files.readAllLines(path).stream()
-                    .map(String::trim)
-                    .filter(line -> !line.isEmpty() && !line.startsWith("#"))
-                    .toList();
+            phrases = readLinesWithFallback(path);
             if (phrases.isEmpty()) phrases = List.of("@{name}");
             currentPhraseFile = path.getFileName().toString();
             LOGGER.info("Loaded {} phrases from {}", phrases.size(), path);
