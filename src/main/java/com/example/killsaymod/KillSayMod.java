@@ -200,12 +200,12 @@ public class KillSayMod implements ClientModInitializer {
 
     private static List<String> defaultPhrases() {
         return List.of(
-                "@{name} Ez\uff0c\u6253\u4e0d\u8fc7OpenZen\uff0cGet \u4e0a Zen.<{randomletters}...>",
-                "@{name} \u6ca1\u6253\u8fc7CloudBounce\u5341\u5206\u6401\u7b11\uff0c\u516c\u76ca\u83b7\u53d6\u52a0\u7fa4 <{random}...>",
-                "@{name} \u516c\u76caBMW\u5ba2\u6237\u7aef\u90fd\u6253\u4e0d\u8fc7\u4f60\u771f\u9006\u5929\u4e86\uff0c\u83b7\u53d6\u52a0\u7fa4 <{random}...>",
-                "@{name} \u4e00\u7834\uff0c\u5367\u9f99\u51fa\u5c71\uff0c\u4f60\u5df2\u88abSilenceFix\u51fb\u8d25\uff01\u514d\u8d39\u83b7\u53d6\u5ba2\u6237\u7aef\u548c\u540c\u6b3e\u914d\u7f6e\u52a0\u7fa4 <{random}...> \u6b23\u6b23\u54e5\u4fdd\u8bc1\u4e0d\u6536\u53d6\u4e00\u5206\u94b1\u54e6\uff01",
-                "@{name} Naven alpha\u725bb\uff0c\u514d\u8d39\u5ba2\u6237\u7aef\u83b7\u53d6\u52a0\u7fa4 <{random}...>",
-                "@{name} Ednaven\u90fd\u6253\u4e0d\u8fc7\u5144\u5f1f\u4f60\u771f\u65e0\u654c\u4e86\u516c\u76ca\u83b7\u53d6\u52a0\u7fa4 <{random}...>"
+                "@{name} 打不过OpenZen，公益Get加群 <{random}...>",
+                "@{name} 我正在使用CloudBounce，公益获取加群 <{random}...>",
+                "@{name} 公益BMW客户端都打不过你真逆天了，获取加群 <{random}...>",
+                "@{name} 一破，卧龙出山，你已被SilenceFix击败！免费获取客户端和同款配置加群 <{random}...>",
+                "@{name} 你被我用Naven alpha创死，你已急哭，免费客户端获取加群 <{random}...>",
+                "@{name} Ednaven都打不过兄弟你真无敌了公益获取加群 <{random}...>"
         );
     }
 
