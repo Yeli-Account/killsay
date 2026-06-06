@@ -272,6 +272,9 @@ public class KillSayMod implements ClientModInitializer {
             }
             for (Path p : txtFiles) {
                 List<String> lines = readLinesWithFallback(p);
+                for (String line : lines) {
+                    LOGGER.info("Loaded phrase from {}: [{}]", p.getFileName(), line);
+                }
                 all.addAll(lines);
             }
             if (all.isEmpty()) all.add("@{name}");
@@ -623,7 +626,17 @@ public class KillSayMod implements ClientModInitializer {
         if (client.player.isDead() || client.player.getHealth() <= 0f) return;
 
         String message = pickPhrase();
+        LOGGER.info("[KillSay] raw phrase: [{}]", message);
+        LOGGER.info("[KillSay] phrase contains 布吉岛: {}", message.contains("布吉岛"));
+        for (int i = 0; i < message.length(); i++) {
+            char c = message.charAt(i);
+            if (c > 127) {
+                LOGGER.info("[KillSay] char {}: U+{:04X} [{}]", i, (int)c, c);
+                break;
+            }
+        }
         message = replacePlaceholders(message, victimName, client.player);
+        LOGGER.info("[KillSay] final message: [{}]", message);
 
         client.player.networkHandler.sendChatMessage(message);
         LOGGER.info("[KillSay] {} -> {}", victimName, message);
