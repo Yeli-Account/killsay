@@ -9,6 +9,8 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.PersistentProjectileEntity;
+import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
@@ -37,18 +39,19 @@ public class KillSayMod implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("killsaymod");
     private static final Random RANDOM = new Random();
     private static final long TRACK_TIMEOUT = 20000;
-    private static final long KILL_COOLDOWN = 500;
-    private static final long PENDING_TIMEOUT = 3000;
+    private static final long PENDING_TIMEOUT = 500;
+    private static KillSayMod INSTANCE;
 
     private List<String> phrases = new ArrayList<>();
     private String currentPhraseFile = "killsay.txt";
     private final Map<Integer, AttackRecord> tracked = new HashMap<>();
     private final Map<Integer, PendingKill> pendingKills = new HashMap<>();
-    private final Map<Integer, Float> entityHealthMap = new HashMap<>();
-    private long lastKillTime = 0;
     private boolean enabled = true;
     private boolean testing = false;
     private long lastTestTime = 0;
+    private long lastCombatTime = 0;
+    private int lastSentIndex = -1;
+    private boolean wasUsingItem = false;
 
     private static class AttackRecord {
         final long time;
@@ -71,19 +74,24 @@ public class KillSayMod implements ClientModInitializer {
 
     private static class PendingKill {
         final long time;
+        final long attackTime;
         final String victimName;
         final int entityId;
         final World world;
-        PendingKill(long time, String victimName, int entityId, World world) {
+        final boolean seenLowHealth;
+        PendingKill(long time, long attackTime, String victimName, int entityId, World world, boolean seenLowHealth) {
             this.time = time;
+            this.attackTime = attackTime;
             this.victimName = victimName;
             this.entityId = entityId;
             this.world = world;
+            this.seenLowHealth = seenLowHealth;
         }
     }
 
     @Override
     public void onInitializeClient() {
+        INSTANCE = this;
         loadPhrases();
         createReadme();
         registerCommands();
@@ -93,16 +101,46 @@ public class KillSayMod implements ClientModInitializer {
     }
 
     private Path getPhrasesPath() {
+        return getVocabularyDir().resolve("killsay.txt");
+    }
+
+    private Path getBaseDir() {
         Path gameDir = MinecraftClient.getInstance().runDirectory.toPath().toAbsolutePath().normalize();
-        Path parent = gameDir.getParent();
-        if (parent != null && "versions".equals(parent.getFileName().toString())) {
-            return gameDir.resolve("killsay").resolve("killsay.txt");
-        }
-        return gameDir.resolve("killsay").resolve("killsay.txt");
+        return gameDir.resolve("killsay");
     }
 
     private Path getKillsayDir() {
-        return getPhrasesPath().getParent();
+        return getBaseDir();
+    }
+
+    private Path getVocabularyDir() {
+        return getBaseDir().resolve("vocabulary");
+    }
+
+    private Path getCurrentFilePath() {
+        return getKillsayDir().resolve("current");
+    }
+
+    private void saveCurrentFile(String fileName) {
+        try {
+            Files.createDirectories(getKillsayDir());
+            Files.writeString(getCurrentFilePath(), fileName);
+        } catch (IOException e) {
+            LOGGER.error("Failed to save current file", e);
+        }
+    }
+
+    private String loadCurrentFile() {
+        try {
+            Path path = getCurrentFilePath();
+            if (Files.exists(path)) {
+                String name = Files.readString(path).trim();
+                if (!name.isEmpty()) return name;
+            }
+        } catch (IOException e) {
+            // ignore
+        }
+        return null;
     }
 
     private void createReadme() {
@@ -122,9 +160,7 @@ public class KillSayMod implements ClientModInitializer {
         return List.of(
                 "# KillSay Mod",
                 "",
-                "> **该 Mod 完全免费，如果你是付费获取的，恭喜你被圈了**",
-                "",
-                "一个 Minecraft Fabric \u5ba2\u6237\u7aef\u6a21\u7ec4\uff0c\u51fb\u6740\u81ea\u52a8\u53d1\u8a00\u3002",
+                "> **\u8be5 Mod \u5b8c\u5168\u514d\u8d39\uff0c\u5982\u679c\u4f60\u662f\u4ed8\u8d39\u83b7\u53d6\u7684\uff0c\u606d\u559c\u4f60\u88ab\u5708\u4e86**",
                 "",
                 "---",
                 "",
@@ -132,25 +168,21 @@ public class KillSayMod implements ClientModInitializer {
                 "",
                 "- \u672c Mod \u5b8c\u5168\u514d\u8d39\u5f00\u6e90",
                 "- **\u5f00\u53d1\u8005**\uff1a3998055542 / 1106591285",
-                "- \u5982\u679c\u4f60\u662f\u901a\u8fc7\u4ed8\u8d39\u83b7\u5f97\u7684\u6b64 Mod\uff0c\u8bf7\u7acb\u5373\u8054\u7cfb\u5f00\u53d1\u8005\u4e3e\u62a5",
                 "",
                 "---",
                 "",
                 "## \u5360\u4f4d\u7b26",
                 "",
-                "| \u5360\u4f4d\u7b26 | \u652f\u6301 @ \u524d\u7f00 | \u8bf4\u660e |",
-                "|--------|:----------:|------|",
-                "| `{name}` | `@{name}` | \u88ab\u51fb\u6740\u8005\u7684\u6e38\u620f\u540d |",
-                "| `{killer}` | `@{killer}` | \u4f60\u81ea\u5df1\u7684\u6e38\u620f\u540d |",
-                "| `{health}` | \u274c | \u4f60\u5f53\u524d\u7684\u751f\u547d\u503c\uff08\u6574\u6570\uff09 |",
-                "| `{item}` / `{weapon}` | \u274c | \u4f60\u624b\u4e2d\u6301\u7684\u7269\u54c1\u540d\u79f0 |",
-                "| `{x}` `{y}` `{z}` | \u274c | \u4f60\u7684\u5750\u6807 |",
-                "| `{random}` | \u274c | \u968f\u673a\u6570 0-999999\uff086\u4f4d\u6570\u5b57\uff09 |",
-                "| `{randomletters}` | \u274c | \u968f\u673a\u5b57\u6bcd\u7ec4\u5408\uff08\u56fa\u5b9a6\u4e2a\u5927\u5c0f\u5199\u5b57\u6bcd\uff09 |",
+                "{name} \u88ab\u51fb\u6740\u8005\u7684\u6e38\u620f\u540d",
+                "{killer} \u4f60\u81ea\u5df1\u7684\u6e38\u620f\u540d",
+                "{health} \u4f60\u5f53\u524d\u7684\u751f\u547d\u503c\uff08\u6574\u6570\uff09",
+                "{item}/{weapon} \u4f60\u624b\u4e2d\u6301\u7684\u7269\u54c1\u540d\u79f0",
+                "{x} {y} {z} \u4f60\u7684\u5750\u6807",
+                "{random} \u968f\u673a\u6570 0-999999\uff086\u4f4d\u6570\u5b57\uff09",
+                "{randomletters} \u968f\u673a\u5b57\u6bcd\u7ec4\u5408\uff08\u56fa\u5b9a6\u4e2a\u5927\u5c0f\u5199\u5b57\u6bcd\uff09",
                 "",
-                "---",
                 "",
-                "## \u6307\u4ee4\u8bf4\u660e",
+                "# \u6307\u4ee4\u8bf4\u660e",
                 "",
                 "### /ks",
                 "\u5f00\u5173\u81ea\u52a8\u558a\u8bdd\u529f\u80fd\u3002\u518d\u6b21\u8f93\u5165\u5207\u6362\u5f00\u5173\u72b6\u6001\u3002",
@@ -210,6 +242,10 @@ public class KillSayMod implements ClientModInitializer {
     }
 
     private void loadPhrases() {
+        String savedFile = loadCurrentFile();
+        if (savedFile != null && !"killsay.txt".equals(savedFile) && loadPhrases(savedFile)) {
+            return;
+        }
         try {
             Path path = getPhrasesPath();
             if (Files.notExists(path)) {
@@ -221,6 +257,7 @@ public class KillSayMod implements ClientModInitializer {
                     .filter(line -> !line.isEmpty() && !line.startsWith("#"))
                     .toList();
             currentPhraseFile = "killsay.txt";
+            saveCurrentFile("killsay.txt");
             LOGGER.info("Loaded {} phrases from {}", phrases.size(), path);
         } catch (IOException e) {
             LOGGER.error("Failed to load phrases file", e);
@@ -230,7 +267,7 @@ public class KillSayMod implements ClientModInitializer {
 
     private boolean loadPhrases(String fileName) {
         try {
-            Path dir = getKillsayDir();
+            Path dir = getVocabularyDir();
             Path path = dir.resolve(fileName);
             if (Files.notExists(path)) {
                 if (!fileName.endsWith(".txt")) {
@@ -244,6 +281,7 @@ public class KillSayMod implements ClientModInitializer {
                     .toList();
             if (phrases.isEmpty()) phrases = List.of("@{name}");
             currentPhraseFile = path.getFileName().toString();
+            saveCurrentFile(currentPhraseFile);
             LOGGER.info("Loaded {} phrases from {}", phrases.size(), path);
             return true;
         } catch (IOException e) {
@@ -275,6 +313,7 @@ public class KillSayMod implements ClientModInitializer {
                             Path path = getPhrasesPath();
                             Files.createDirectories(path.getParent());
                             Files.writeString(path, String.join(System.lineSeparator(), defaultPhrases()));
+                            saveCurrentFile("killsay.txt");
                             loadPhrases();
                             ctx.getSource().sendFeedback(Text.literal("\u00a7a[KillSayMod] \u5df2\u6062\u590d\u9ed8\u8ba4\u8bcd\u6c47"));
                         } catch (IOException e) {
@@ -295,7 +334,7 @@ public class KillSayMod implements ClientModInitializer {
                     .then(literal("list")
                             .executes(ctx -> {
                                 try {
-                                    Path dir = getKillsayDir();
+                                    Path dir = getVocabularyDir();
                                     if (Files.notExists(dir)) {
                                         ctx.getSource().sendFeedback(Text.literal("\u00a7c[KillSayMod] \u8bcd\u6c47\u76ee\u5f55\u4e0d\u5b58\u5728"));
                                         return 1;
@@ -347,7 +386,7 @@ public class KillSayMod implements ClientModInitializer {
                                     .executes(ctx -> {
                                         String name = StringArgumentType.getString(ctx, "name").trim();
                                         try {
-                                            Path dir = getKillsayDir();
+                                            Path dir = getVocabularyDir();
                                             Path path = dir.resolve(name);
                                             if (Files.notExists(path) && !name.endsWith(".txt")) {
                                                 path = dir.resolve(name + ".txt");
@@ -380,14 +419,17 @@ public class KillSayMod implements ClientModInitializer {
     private void registerAttackTracker() {
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!enabled) return ActionResult.PASS;
-            if (entity instanceof LivingEntity living) {
-                tracked.put(entity.getId(), new AttackRecord(
+            lastCombatTime = System.currentTimeMillis();
+            if (entity instanceof PlayerEntity target) {
+                AttackRecord rec = new AttackRecord(
                         System.currentTimeMillis(),
-                        getEntityName(living),
+                        getEntityName(target),
                         entity.getPos(),
-                        living.getHealth(),
+                        target.getHealth(),
                         world
-                ));
+                );
+                if (target.getHealth() <= 4f) rec.seenLowHealth = true;
+                tracked.put(entity.getId(), rec);
             }
             return ActionResult.PASS;
         });
@@ -401,7 +443,7 @@ public class KillSayMod implements ClientModInitializer {
                 long now = System.currentTimeMillis();
                 if (now - lastTestTime >= 500) {
                     lastTestTime = now;
-                    String msg = phrases.get(RANDOM.nextInt(phrases.size()));
+                    String msg = pickPhrase();
                     msg = replacePlaceholders(msg, "\u6d4b\u8bd5\u76ee\u6807", client.player);
                     client.player.networkHandler.sendChatMessage(msg);
                 }
@@ -417,11 +459,17 @@ public class KillSayMod implements ClientModInitializer {
 
             long now = System.currentTimeMillis();
 
-            trackEntityHealth(client);
+            if (client.player.handSwinging) {
+                lastCombatTime = now;
+            }
+            if (wasUsingItem && !client.player.isUsingItem()) {
+                lastCombatTime = now;
+            }
+            wasUsingItem = client.player.isUsingItem();
+
+            trackProjectiles(client);
 
             checkPendingKills(client, now);
-
-            if (now - lastKillTime < KILL_COOLDOWN) return;
 
             Iterator<Map.Entry<Integer, AttackRecord>> it = tracked.entrySet().iterator();
             while (it.hasNext()) {
@@ -441,34 +489,27 @@ public class KillSayMod implements ClientModInitializer {
                     break;
                 }
 
-                if (entity instanceof LivingEntity living) {
+                if (entity instanceof PlayerEntity player) {
                     if (client.world != rec.world) {
                         it.remove();
                         break;
                     }
-                    rec.lastHealth = living.getHealth();
+                    rec.lastHealth = player.getHealth();
                     rec.lastPos = entity.getPos();
                     rec.lastSeenY = entity.getY();
-                    if (living.getHealth() <= 4f) rec.seenLowHealth = true;
-                    if (living.isDead() || living.getHealth() <= 0f) {
+                    if (player.getHealth() <= 4f) rec.seenLowHealth = true;
+                    if (player.isDead() || player.getHealth() <= 0f) {
                         it.remove();
-                        trySend(rec.name);
-                        lastKillTime = now;
-                        break;
+                        if (rec.seenLowHealth || now - rec.time < 500) {
+                            trySend(rec.name);
+                        }
+                        continue;
                     }
                 } else if (entity == null) {
                     it.remove();
                     if (client.world != rec.world) break;
-                    boolean fellToVoid = rec.lastSeenY < client.player.getY() - 20 || rec.lastSeenY < -16;
-                    boolean nearLastPos = client.player.squaredDistanceTo(rec.lastPos) < 48 * 48;
-                    boolean diedQuickly = (now - rec.time < 500);
-                    if (fellToVoid) {
-                        pendingKills.put(entityId, new PendingKill(now, rec.name, entityId, rec.world));
-                    } else if (nearLastPos && diedQuickly) {
-                        trySend(rec.name);
-                        lastKillTime = now;
-                    }
-                    break;
+                    pendingKills.put(entityId, new PendingKill(now, rec.time, rec.name, entityId, rec.world, rec.seenLowHealth));
+                    continue;
                 }
             }
         });
@@ -478,7 +519,6 @@ public class KillSayMod implements ClientModInitializer {
         Iterator<Map.Entry<Integer, PendingKill>> it = pendingKills.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Integer, PendingKill> entry = it.next();
-            int entityId = entry.getKey();
             PendingKill pk = entry.getValue();
 
             if (client.world != pk.world) {
@@ -488,58 +528,105 @@ public class KillSayMod implements ClientModInitializer {
 
             if (now - pk.time > PENDING_TIMEOUT) {
                 it.remove();
-                trySend(pk.victimName);
-                lastKillTime = now;
-                break;
-            }
-
-            Entity entity = client.world.getEntityById(entityId);
-            if (entity instanceof LivingEntity living && !living.isDead() && living.getHealth() > 0f) {
-                it.remove();
+                boolean diedQuickly = (pk.time - pk.attackTime < 500);
+                if (pk.seenLowHealth || diedQuickly) {
+                    if (!entityWithNameExists(client, pk.victimName)) {
+                        trySend(pk.victimName);
+                    }
+                }
+                continue;
             }
         }
     }
 
-    private void trackEntityHealth(MinecraftClient client) {
+    private boolean entityWithNameExists(MinecraftClient client, String name) {
+        if (client.world == null) return false;
+        for (Entity e : client.world.getEntities()) {
+            if (e instanceof PlayerEntity player && player.isAlive() && e != client.player) {
+                String eName = player.getGameProfile().getName();
+                if (eName.equals(name)) return true;
+            }
+        }
+        return false;
+    }
+
+    private void trackProjectiles(MinecraftClient client) {
         if (client.world == null || client.player == null) return;
-        double range = 64.0;
-        Map<Integer, Float> newHealthMap = new HashMap<>();
+        long now = System.currentTimeMillis();
+        if (now - lastCombatTime > 2000) return;
         for (Entity entity : client.world.getEntities()) {
-            if (!(entity instanceof LivingEntity living)) continue;
-            if (entity == client.player) continue;
-            if (client.player.squaredDistanceTo(entity) > range * range) continue;
-            int id = entity.getId();
-            float hp = living.getHealth();
-            if (hp <= 0f || living.isDead()) continue;
-            Float prev = entityHealthMap.get(id);
-            if (prev != null && hp < prev && !tracked.containsKey(id)) {
-                tracked.put(id, new AttackRecord(
-                        System.currentTimeMillis(),
-                        getEntityName(living),
-                        entity.getPos(),
-                        hp,
+            if (!(entity instanceof ProjectileEntity projectile)) continue;
+            if (projectile.getOwner() != client.player) continue;
+            if (tracked.containsKey(entity.getId())) continue;
+            for (Entity target : client.world.getOtherEntities(
+                    client.player, entity.getBoundingBox().expand(0.1))) {
+                if (!(target instanceof PlayerEntity player)) continue;
+                if (tracked.containsKey(target.getId()) || !player.isAlive()) continue;
+                if (entity instanceof PersistentProjectileEntity pa) {
+                    Vec3d vel = pa.getVelocity();
+                    if (vel.lengthSquared() < 0.01
+                            && !entity.getBoundingBox().intersects(
+                                    target.getBoundingBox().expand(0.1))) {
+                        continue;
+                    }
+                }
+                tracked.put(target.getId(), new AttackRecord(
+                        now,
+                        getEntityName(player),
+                        target.getPos(),
+                        player.getHealth(),
                         client.world
                 ));
             }
-            newHealthMap.put(id, hp);
         }
-        entityHealthMap.clear();
-        entityHealthMap.putAll(newHealthMap);
+    }
+
+    public static void onPlayerRemoved(PlayerEntity player) {
+        if (INSTANCE == null) return;
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null || client.player.isDead() || client.player.getHealth() <= 0f) return;
+        if (player == client.player) return;
+        if (player.getWorld() == null) return;
+
+        long now = System.currentTimeMillis();
+
+        if (player.isDead() || player.getY() <= player.getWorld().getBottomY()) {
+            AttackRecord rec = INSTANCE.tracked.remove(player.getId());
+            if (rec != null) {
+                if (rec.seenLowHealth || now - rec.time < 500) {
+                    INSTANCE.pendingKills.remove(player.getId());
+                    if (!INSTANCE.entityWithNameExists(client, rec.name)) {
+                        INSTANCE.trySend(rec.name);
+                    }
+                }
+            }
+        }
     }
 
     private void trySend(String victimName) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || phrases.isEmpty()) return;
+        if (client.player.isDead() || client.player.getHealth() <= 0f) return;
 
-        String message = phrases.get(RANDOM.nextInt(phrases.size()));
+        String message = pickPhrase();
         message = replacePlaceholders(message, victimName, client.player);
 
         if (client.isIntegratedServerRunning()) {
-            client.player.sendMessage(Text.literal(message), false);
+            client.inGameHud.getChatHud().addMessage(Text.literal(message));
         } else {
             client.player.networkHandler.sendChatMessage(message);
         }
         LOGGER.info("[KillSay] {} -> {}", victimName, message);
+    }
+
+    private String pickPhrase() {
+        if (phrases.size() == 1) return phrases.get(0);
+        int index;
+        do {
+            index = RANDOM.nextInt(phrases.size());
+        } while (index == lastSentIndex);
+        lastSentIndex = index;
+        return phrases.get(index);
     }
 
     private void testPhrases() {
@@ -551,7 +638,7 @@ public class KillSayMod implements ClientModInitializer {
 
     private void suggestTxtFiles(SuggestionsBuilder builder) {
         try {
-            Path dir = getKillsayDir();
+            Path dir = getVocabularyDir();
             if (Files.exists(dir)) {
                 try (var stream = Files.list(dir)) {
                     stream.filter(p -> p.toString().endsWith(".txt"))

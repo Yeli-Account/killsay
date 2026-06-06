@@ -1,17 +1,25 @@
 {
-	"schemaVersion": 1,
-	"id": "killsaymod",
-	"version": "1.0",
-	"name": "KillSayMod",
-	"description": "Auto send message on player kill",
-	"authors": [],
-	"contact": {},
-	"license": "MIT",
-	"icon": "assets/killsaymod/icon.png",
-	"environment": "client",
-	"entrypoints": {
-		"client": [
-			"com.example.killsaymod.KillSayMod"
-		]
-	}
+    "schemaVersion": 1,
+    "id": "killsay",
+    "version": "1.0.0",
+    "name": "killsay",
+    "description": "\u51fb\u6740\u5b9e\u4f53\u540e\u81ea\u52a8\u53d1\u9001\u81ea\u5b9a\u4e49\u6d88\u606f\u7684 Fabric \u6a21\u7ec4",
+    "authors": [],
+    "contact": {},
+    "license": "MIT",
+    "icon": "assets/killsaymod/icon.png",
+    "environment": "client",
+    "entrypoints": {
+        "client": [
+            "com.example.killsaymod.KillSayMod"
+        ]
+    },
+    "mixins": [
+        "killsaymod.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.14.0",
+        "minecraft": "1.21.4",
+        "fabric-api": "*"
+    }
 }
