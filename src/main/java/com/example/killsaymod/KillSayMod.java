@@ -79,13 +79,15 @@ public class KillSayMod implements ClientModInitializer {
         final int entityId;
         final World world;
         final boolean seenLowHealth;
-        PendingKill(long time, long attackTime, String victimName, int entityId, World world, boolean seenLowHealth) {
+        final double lastY;
+        PendingKill(long time, long attackTime, String victimName, int entityId, World world, boolean seenLowHealth, double lastY) {
             this.time = time;
             this.attackTime = attackTime;
             this.victimName = victimName;
             this.entityId = entityId;
             this.world = world;
             this.seenLowHealth = seenLowHealth;
+            this.lastY = lastY;
         }
     }
 
@@ -513,7 +515,7 @@ public class KillSayMod implements ClientModInitializer {
                 } else if (entity == null) {
                     it.remove();
                     if (client.world != rec.world) break;
-                    pendingKills.put(entityId, new PendingKill(now, rec.time, rec.name, entityId, rec.world, rec.seenLowHealth));
+                    pendingKills.put(entityId, new PendingKill(now, rec.time, rec.name, entityId, rec.world, rec.seenLowHealth, rec.lastPos.y));
                     continue;
                 }
             }
@@ -534,7 +536,8 @@ public class KillSayMod implements ClientModInitializer {
             if (now - pk.time > PENDING_TIMEOUT) {
                 it.remove();
                 boolean diedQuickly = (pk.time - pk.attackTime < 500);
-                if (pk.seenLowHealth || diedQuickly) {
+                boolean fellIntoVoid = (pk.lastY <= pk.world.getBottomY());
+                if (pk.seenLowHealth || diedQuickly || fellIntoVoid) {
                     if (!entityWithNameExists(client, pk.victimName)) {
                         trySend(pk.victimName);
                     }
@@ -598,7 +601,8 @@ public class KillSayMod implements ClientModInitializer {
         if (player.isDead() || player.getY() <= player.getWorld().getBottomY()) {
             AttackRecord rec = INSTANCE.tracked.remove(player.getId());
             if (rec != null) {
-                if (rec.seenLowHealth || now - rec.time < 500) {
+                boolean fellIntoVoid = (player.getY() <= player.getWorld().getBottomY());
+                if (rec.seenLowHealth || now - rec.time < 500 || fellIntoVoid) {
                     INSTANCE.pendingKills.remove(player.getId());
                     if (!INSTANCE.entityWithNameExists(client, rec.name)) {
                         INSTANCE.trySend(rec.name);
