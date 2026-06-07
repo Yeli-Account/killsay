@@ -536,7 +536,7 @@ public class KillSayMod implements ClientModInitializer {
             if (now - pk.time > PENDING_TIMEOUT) {
                 it.remove();
                 boolean diedQuickly = (pk.time - pk.attackTime < 500);
-                boolean fellIntoVoid = (pk.lastY <= pk.world.getBottomY());
+                boolean fellIntoVoid = (pk.lastY < pk.world.getBottomY());
                 if (pk.seenLowHealth || diedQuickly || fellIntoVoid) {
                     if (!entityWithNameExists(client, pk.victimName)) {
                         trySend(pk.victimName);
@@ -598,10 +598,10 @@ public class KillSayMod implements ClientModInitializer {
 
         long now = System.currentTimeMillis();
 
-        if (player.isDead() || player.getY() <= player.getWorld().getBottomY()) {
+        if (player.isDead() || player.getY() < player.getWorld().getBottomY()) {
             AttackRecord rec = INSTANCE.tracked.remove(player.getId());
             if (rec != null) {
-                boolean fellIntoVoid = (player.getY() <= player.getWorld().getBottomY());
+                boolean fellIntoVoid = (player.getY() < player.getWorld().getBottomY());
                 if (rec.seenLowHealth || now - rec.time < 500 || fellIntoVoid) {
                     INSTANCE.pendingKills.remove(player.getId());
                     if (!INSTANCE.entityWithNameExists(client, rec.name)) {
@@ -613,6 +613,7 @@ public class KillSayMod implements ClientModInitializer {
     }
 
     private void trySend(String victimName) {
+        if (!enabled) return;
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || phrases.isEmpty()) return;
         if (client.player.isDead() || client.player.getHealth() <= 0f) return;
