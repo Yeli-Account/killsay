@@ -94,12 +94,13 @@ public class KillSayMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
+        enabled = loadEnabled();
         loadPhrases();
         createReadme();
         registerCommands();
         registerAttackTracker();
         registerDeathDetector();
-        LOGGER.info("KillSayMod loaded");
+        LOGGER.info("KillSayMod loaded, enabled={}", enabled);
     }
 
     private Path getPhrasesPath() {
@@ -123,6 +124,10 @@ public class KillSayMod implements ClientModInitializer {
         return getKillsayDir().resolve("current");
     }
 
+    private Path getEnabledFilePath() {
+        return getKillsayDir().resolve("enabled");
+    }
+
     private void saveCurrentFile(String fileName) {
         try {
             Files.createDirectories(getKillsayDir());
@@ -143,6 +148,27 @@ public class KillSayMod implements ClientModInitializer {
             // ignore
         }
         return null;
+    }
+
+    private void saveEnabled(boolean state) {
+        try {
+            Files.createDirectories(getKillsayDir());
+            Files.writeString(getEnabledFilePath(), state ? "true" : "false");
+        } catch (IOException e) {
+            LOGGER.error("Failed to save enabled state", e);
+        }
+    }
+
+    private boolean loadEnabled() {
+        try {
+            Path path = getEnabledFilePath();
+            if (Files.exists(path)) {
+                return "true".equals(Files.readString(path).trim());
+            }
+        } catch (IOException e) {
+            // ignore
+        }
+        return true;
     }
 
     private void createReadme() {
@@ -302,6 +328,7 @@ public class KillSayMod implements ClientModInitializer {
             dispatcher.register(literal("ks")
                     .executes(ctx -> {
                         enabled = !enabled;
+                        saveEnabled(enabled);
                         String status = enabled ? "\u00a7a\u5f00\u542f" : "\u00a7c\u5173\u95ed";
                         ctx.getSource().sendFeedback(Text.literal("\u00a7e[KillSayMod] \u81ea\u52a8\u8bf4\u8bdd\u5df2" + status));
                         return 1;
