@@ -698,6 +698,9 @@ public class KillSayMod implements ClientModInitializer {
                     it.remove();
                     if (client.world != rec.world) break;
                     if (rec.teleported) continue;
+                    double dx = rec.lastPos.x - client.player.getX();
+                    double dz = rec.lastPos.z - client.player.getZ();
+                    if (dx * dx + dz * dz > 1024) continue;
                     pendingKills.put(entityId, new PendingKill(now, rec.name, entityId, rec.world, rec.seenLowHealth, rec.wasInVoid));
                     continue;
                 }
