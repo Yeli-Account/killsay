@@ -15,6 +15,6 @@ public class EntityMixin {
         Entity self = (Entity) (Object) this;
         if (!self.getWorld().isClient()) return;
         if (!(self instanceof PlayerEntity player)) return;
-        KillSayMod.onPlayerRemoved(player);
+        KillSayMod.onPlayerRemoved(player, reason);
     }
 }

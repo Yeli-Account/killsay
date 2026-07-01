@@ -51,6 +51,7 @@ public class KillSayMod implements ClientModInitializer {
     private long lastTestTime = 0;
     private int lastSentIndex = -1;
     private boolean wasUsingItem = false;
+    private String deferredVictim;
 
     static final KeyBinding TOGGLE_KEY = new KeyBinding(
             "key.killsay.toggle",
@@ -637,7 +638,13 @@ public class KillSayMod implements ClientModInitializer {
             if (client.player.isDead() || client.player.getHealth() <= 0f) {
                 tracked.clear();
                 pendingKills.clear();
+                deferredVictim = null;
                 return;
+            }
+
+            if (deferredVictim != null) {
+                trySend(deferredVictim);
+                deferredVictim = null;
             }
 
             long now = System.currentTimeMillis();
@@ -690,7 +697,7 @@ public class KillSayMod implements ClientModInitializer {
                     if (player.isDead() || player.getHealth() <= 0f) {
                         it.remove();
                         if (now - rec.time < 5000) {
-                            trySend(rec.name);
+                            deferredVictim = rec.name;
                         }
                         continue;
                     }
@@ -749,7 +756,7 @@ public class KillSayMod implements ClientModInitializer {
             if (now - pk.time > PENDING_TIMEOUT) {
                 it.remove();
                 if (!entityWithNameExists(client, pk.victimName)) {
-                    trySend(pk.victimName);
+                    deferredVictim = pk.victimName;
                 }
                 continue;
             }
@@ -768,7 +775,8 @@ public class KillSayMod implements ClientModInitializer {
     }
 
 
-    public static void onPlayerRemoved(PlayerEntity player) {
+    public static void onPlayerRemoved(PlayerEntity player, Entity.RemovalReason reason) {
+        if (reason == Entity.RemovalReason.CHANGED_DIMENSION) return;
         if (INSTANCE == null) return;
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.player.isDead() || client.player.getHealth() <= 0f) return;
@@ -791,7 +799,7 @@ public class KillSayMod implements ClientModInitializer {
         dz = rec.lastPos.z - client.player.getZ();
         if (dx * dx + dz * dz > 1024) return;
 
-        INSTANCE.trySend(rec.name);
+        INSTANCE.deferredVictim = rec.name;
     }
 
     private void trySend(String victimName) {
