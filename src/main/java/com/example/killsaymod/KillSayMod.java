@@ -773,26 +773,25 @@ public class KillSayMod implements ClientModInitializer {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.player.isDead() || client.player.getHealth() <= 0f) return;
         if (player == client.player) return;
-        if (player.getWorld() == null) return;
+
+        AttackRecord rec = INSTANCE.tracked.remove(player.getId());
+        if (rec == null) return;
+        INSTANCE.pendingKills.remove(player.getId());
 
         long now = System.currentTimeMillis();
+        if (now - rec.time >= 8000) return;
 
-        if (player.getHealth() <= 0f || player.isDead()) {
-            AttackRecord rec = INSTANCE.tracked.remove(player.getId());
-            if (rec != null) {
-                INSTANCE.pendingKills.remove(player.getId());
-                if (now - rec.time < 8000) {
-                    if (!INSTANCE.entityWithNameExists(client, rec.name)) {
-                        INSTANCE.trySend(rec.name);
-                    }
-                }
-            }
-        } else {
-            AttackRecord rec = INSTANCE.tracked.remove(player.getId());
-            if (rec != null) {
-                INSTANCE.pendingKills.remove(player.getId());
-            }
-        }
+        if (player.getWorld() != rec.world) return;
+
+        double dx = player.getX() - rec.lastPos.x;
+        double dz = player.getZ() - rec.lastPos.z;
+        if (dx * dx + dz * dz > 100) return;
+
+        dx = rec.lastPos.x - client.player.getX();
+        dz = rec.lastPos.z - client.player.getZ();
+        if (dx * dx + dz * dz > 1024) return;
+
+        INSTANCE.trySend(rec.name);
     }
 
     private void trySend(String victimName) {
