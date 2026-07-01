@@ -52,6 +52,7 @@ public class KillSayMod implements ClientModInitializer {
     private int lastSentIndex = -1;
     private boolean wasUsingItem = false;
     private String deferredVictim;
+    private boolean wasDeadLastTick;
 
     static final KeyBinding TOGGLE_KEY = new KeyBinding(
             "key.killsay.toggle",
@@ -636,9 +637,16 @@ public class KillSayMod implements ClientModInitializer {
             if (!enabled) return;
 
             if (client.player.isDead() || client.player.getHealth() <= 0f) {
+                wasDeadLastTick = true;
                 tracked.clear();
                 pendingKills.clear();
                 deferredVictim = null;
+                return;
+            }
+
+            if (wasDeadLastTick) {
+                deferredVictim = null;
+                wasDeadLastTick = false;
                 return;
             }
 
