@@ -696,9 +696,10 @@ public class KillSayMod implements ClientModInitializer {
                     double dz = entity.getZ() - rec.lastPos.z;
                     if (dx * dx + dz * dz > 100) {
                         rec.teleported = true;
+                    } else {
+                        rec.lastPos = entity.getPos();
                     }
                     rec.lastHealth = player.getHealth();
-                    rec.lastPos = entity.getPos();
                     rec.lastSeenY = entity.getY();
                     if (entity.getY() < entity.getWorld().getBottomY()) rec.wasInVoid = true;
                     if (player.getHealth() <= 4f) rec.seenLowHealth = true;
@@ -798,6 +799,8 @@ public class KillSayMod implements ClientModInitializer {
         if (now - rec.time >= 8000) return;
 
         if (player.getWorld() != rec.world) return;
+
+        if (rec.teleported) return;
 
         double dx = player.getX() - rec.lastPos.x;
         double dz = player.getZ() - rec.lastPos.z;
